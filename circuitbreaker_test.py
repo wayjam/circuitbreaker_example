@@ -35,9 +35,37 @@ class TestCircuitBreaker(unittest.TestCase):
         # halfopen
         self.assertEqual(cb.get_state(), State.HALF_OPEN)
 
+        for _ in range(6):
+            cb.inc()
+
+        self.assertEqual(cb.get_state(), State.OPEN)
+
+        time.sleep(2)
+
+        self.assertEqual(cb.get_state(), State.HALF_OPEN)
+
         time.sleep(2)
 
         # return to closed
+        self.assertEqual(cb.get_state(), State.CLOSED)
+
+    def test_expire(self):
+        cb = Closed(
+            "tester",
+            CircuitBreakerOptions(
+                timeout=1,
+                halfopen_timeout=1,
+                open_timeout=1,
+                failure_to_open=20,
+                halfopen_max_failure=8,
+            ))
+        for _ in range(21):
+            cb.inc()
+
+        self.assertEqual(cb.get_state(), State.OPEN)
+
+        time.sleep(3)
+
         self.assertEqual(cb.get_state(), State.CLOSED)
 
 

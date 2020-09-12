@@ -34,13 +34,6 @@ class CircuitBreaker:
         self.options = options
         self.initialize()
 
-    @staticmethod
-    def now():
-        return int(time())
-
-    def set_name(self, name):
-        self.name = name
-
     def initialize(self):
         self.count = 0
         self.update = self.now()
@@ -62,12 +55,6 @@ class CircuitBreaker:
         self.__class__ = switch[to]
         self.initialize()
 
-    @property
-    def is_expired(self):
-        if (self.now() - self.update) > self.get_duration_map()[self.state]:
-            return True
-        return False
-
     def get_duration_map(self):
         return {
             State.OPEN: (self.options.Timeout + self.options.HalfOpen_Timeout +
@@ -77,6 +64,16 @@ class CircuitBreaker:
             State.CLOSED:
             self.options.Timeout,
         }
+
+    @property
+    def is_expired(self):
+        if (self.now() - self.update) > self.get_duration_map()[self.state]:
+            return True
+        return False
+
+    @staticmethod
+    def now():
+        return int(time())
 
 
 class Closed(CircuitBreaker):
@@ -99,10 +96,7 @@ class Open(CircuitBreaker):
 
     def inc(self):
         self.pre_check()
-        self.count += 1
-
-        if self.count > self.options.HalfOpen_Max_Failure:
-            self.transition(State.OPEN)
+        super().inc()
 
     def get_state(self):
         self.pre_check()
@@ -110,9 +104,9 @@ class Open(CircuitBreaker):
 
     def pre_check(self):
         diff = self.now() - self.update
-        if (diff > self.options.HalfOpen_Timeout + self.options.Timeout):
+        if (diff > self.options.Open_Timeout + self.options.HalfOpen_Timeout):
             self.transition(State.CLOSED)
-        elif (self.now() - self.update) > self.options.Open_Timeout:
+        elif diff > self.options.Open_Timeout:
             self.transition(State.HALF_OPEN)
         else:
             pass
@@ -125,11 +119,15 @@ class HalfOpen(CircuitBreaker):
         super().__init__(name, options)
 
     def inc(self):
+        self.pre_check()
         super().inc()
-        if self.count > self.options.Failure_To_Open:
+        if self.count > self.options.HalfOpen_Max_Failure:
             self.transition(State.OPEN)
 
     def get_state(self):
+        self.pre_check()
+        return self.state
+
+    def pre_check(self):
         if (self.now() - self.update) > self.options.HalfOpen_Timeout:
             self.transition(State.CLOSED)
-        return self.state
